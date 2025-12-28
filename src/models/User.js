@@ -1,0 +1,125 @@
+const mongoose = require('mongoose');
+
+const UserProfileSchema = new mongoose.Schema({
+  authId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'auth',
+    required: true
+  },
+
+  name: {
+    type: String,
+    trim: true,
+  },
+
+  username: {
+    type: String,
+    trim: true,
+    unique: true,
+    sparse: true // يسمح بقيم فارغة بدون مشاكل uniqueness
+  },
+
+  birth: {
+    type: Date,
+  },
+
+  bio: {
+    type: String,
+    default: "",
+  },
+
+  avatar: {
+    type: String,
+    default: null,
+  },
+
+  cover: {
+    type: String,
+    default: null,
+  },
+
+  isVerified: {
+    type: Boolean,
+    default: false,
+  },
+
+  verificationExpiresAt: {
+    type: Date,
+    default: null,
+  },
+
+  isAdmin: {
+    type: Boolean,
+    default: false,
+  },
+
+  createdAt: {
+    type: Date,
+    default: Date.now,
+  },
+
+  updatedAt: {
+    type: Date,
+    default: Date.now,
+  },
+
+  fcmToken: {
+    type: String,
+    default: null,
+  },
+
+  followers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'UsersProfile'
+  }],
+
+  following: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'UsersProfile'
+  }],
+
+   subscriptionPlan: {
+    type: String,
+    default: null,
+  },
+  subscriptionExpiresAt: {
+    type: Date,
+    default: null,
+  },
+
+   previousSubscription: {
+    plan: String,
+    expiresAt: Date,
+    cancelledAt: Date
+  },
+
+  // سجل المشتريات
+  purchaseHistory: [{
+    packageId: Number,
+    productId: String,
+    purchaseToken: String,
+    purchaseDate: {
+      type: Date,
+      default: Date.now
+    },
+    amount: Number,
+    platform: String,
+    transactionId: String,
+    status: {
+      type: String,
+      enum: ['pending', 'completed', 'cancelled', 'refunded'],
+      default: 'completed'
+    }
+  }],
+
+
+});
+
+// قبل كل حفظ، حدّث الـ updatedAt
+UserProfileSchema.pre('save', function(next) {
+  this.updatedAt = Date.now();
+  next();
+});
+
+const UserProfile = mongoose.model('UsersProfile', UserProfileSchema);
+module.exports = UserProfile;
