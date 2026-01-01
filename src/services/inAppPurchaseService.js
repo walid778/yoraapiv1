@@ -1,27 +1,43 @@
 const axios = require('axios');
+const { google } = require('googleapis');
+const path = require('path');
 
 class InAppPurchaseService {
-  // التحقق من شراء Google Play
   static async verifyGooglePlayPurchase(purchaseToken, productId, packageName) {
     try {
-      const response = await axios.post(
-        `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${packageName}/purchases/products/${productId}/tokens/${purchaseToken}`,
-        {},
-        {
-          params: {
-            access_token: process.env.GOOGLE_API_KEY
-          }
-        }
-      );
+      const keyFilePath = path.join(__dirname, 'service-account.json');
+      
+      const auth = new google.auth.GoogleAuth({
+        keyFile: keyFilePath,
+        scopes: ['https://www.googleapis.com/auth/androidpublisher'],
+      });
 
-      return response.data.purchaseState === 0; // 0 يعني تم الشراء بنجاح
+      const authClient = await auth.getClient();
+      const androidPublisher = google.androidpublisher({
+        version: 'v3',
+        auth: authClient,
+      });
+
+      const response = await androidPublisher.purchases.products.get({
+        packageName: packageName,
+        productId: productId,
+        token: purchaseToken,
+      });
+
+      const purchase = response.data;
+      
+      // التحقق من الحالات المختلفة
+      const isValid = purchase.purchaseState === 0; // 0 = تم الشراء
+      const isAcknowledged = purchase.acknowledgementState === 1; // 1 = تم التأكيد
+      
+      return isValid && isAcknowledged;
+      
     } catch (error) {
       console.error('Google Play verification error:', error.message);
       return false;
     }
   }
 
-  // التحقق من شراء Apple App Store
   static async verifyApplePurchase(receiptData, productId, isSandbox = false) {
     try {
       const url = isSandbox
@@ -35,49 +51,24 @@ class InAppPurchaseService {
       });
 
       if (response.data.status !== 0) {
-        // إذا فشل التحقق في production، جرب في sandbox
         if (!isSandbox) {
           return this.verifyApplePurchase(receiptData, productId, true);
         }
         return false;
       }
 
-      // التحقق من أن المنتج موجود في الإيصال
+      // البحث عن المنتج في الإيصال
       const receipt = response.data.receipt;
       const inAppPurchases = receipt.in_app || [];
-
+      
       return inAppPurchases.some(purchase => 
         purchase.product_id === productId && 
-        purchase.cancellation_date === null
+        !purchase.cancellation_date
       );
     } catch (error) {
       console.error('Apple verification error:', error.message);
       return false;
     }
   }
-
-  // التحقق العام للـ purchase
-  static async verifyPurchase({ purchaseToken, productId, platform = 'google', receiptData }) {
-    try {
-      if (platform === 'google') {
-        return await this.verifyGooglePlayPurchase(
-          purchaseToken, 
-          productId, 
-          process.env.ANDROID_PACKAGE_NAME
-        );
-      } else if (platform === 'apple') {
-        return await this.verifyApplePurchase(
-          receiptData || purchaseToken, 
-          productId
-        );
-      }
-
-      return false;
-    } catch (error) {
-      console.error('Purchase verification error:', error);
-      return false;
-    }
-  }
 }
-
 module.exports = { InAppPurchase: InAppPurchaseService };
