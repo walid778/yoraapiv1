@@ -1,2 +1,6 @@
 node_modules/
 *.7z
+.env
+*.json
+src/config/*.json
+src/*.json
