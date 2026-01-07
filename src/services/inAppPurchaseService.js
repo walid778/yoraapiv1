@@ -3,7 +3,7 @@ const { google } = require('googleapis');
 const path = require('path');
 
 class InAppPurchaseService {
-  static async verifyGooglePlayPurchase(purchaseToken, productId, packageName) {
+  static async verifyGooglePlayPurchaseV1(purchaseToken, productId, packageName) {
     try {
       const keyFilePath = path.join(__dirname, 'service-account.json');
       
@@ -37,6 +37,49 @@ class InAppPurchaseService {
       return false;
     }
   }
+
+
+  static async verifyGooglePlayPurchase(purchaseToken, productId, packageName) {
+  try {
+    const keyFilePath = path.join(__dirname, 'service-account.json');
+
+    const auth = new google.auth.GoogleAuth({
+      keyFile: keyFilePath,
+      scopes: ['https://www.googleapis.com/auth/androidpublisher'],
+    });
+
+    const authClient = await auth.getClient();
+    const androidPublisher = google.androidpublisher({
+      version: 'v3',
+      auth: authClient,
+    });
+
+    const response = await androidPublisher.purchases.subscriptionsv2.get({
+      packageName,
+      token: purchaseToken,
+    });
+
+    const subscription = response.data;
+
+    /*
+      subscription.state:
+      ACTIVE
+      EXPIRED
+      CANCELED
+    */
+
+    const isActive = subscription.state === 'ACTIVE';
+
+    return isActive;
+  } catch (error) {
+    console.error(
+      'Google Play subscription verification error:',
+      error.response?.data || error.message
+    );
+    return false;
+  }
+}
+
 
   static async verifyApplePurchase(receiptData, productId, isSandbox = false) {
     try {
