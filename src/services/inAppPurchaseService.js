@@ -39,7 +39,7 @@ class InAppPurchaseService {
   }
 
 
-  static async verifyGooglePlayPurchase(purchaseToken, productId, packageName) {
+  static async verifyGooglePlayPurchaseV2(purchaseToken, productId, packageName) {
   try {
     const keyFilePath = path.join(__dirname, 'service-account.json');
 
@@ -71,6 +71,50 @@ class InAppPurchaseService {
     const isActive = subscription.state === 'ACTIVE';
 
     return isActive;
+  } catch (error) {
+    console.error(
+      'Google Play subscription verification error:',
+      error.response?.data || error.message
+    );
+    return false;
+  }
+}
+
+static async verifyGooglePlayPurchase(purchaseToken, productId, packageName) {
+  try {
+    const keyFilePath = path.join(__dirname, 'service-account.json');
+
+    const auth = new google.auth.GoogleAuth({
+      keyFile: keyFilePath,
+      scopes: ['https://www.googleapis.com/auth/androidpublisher'],
+    });
+
+    const authClient = await auth.getClient();
+    const androidPublisher = google.androidpublisher({
+      version: 'v3',
+      auth: authClient,
+    });
+
+    const response = await androidPublisher.purchases.subscriptions.get({
+      packageName,
+      subscriptionId: productId, // ⚠️ مهم جدًا
+      token: purchaseToken,
+    });
+
+    const subscription = response.data;
+
+    /*
+      paymentState:
+      1 = Purchased
+      2 = Pending
+    */
+
+    const isPurchased = subscription.paymentState === 1;
+    const notExpired =
+      !subscription.expiryTimeMillis ||
+      Number(subscription.expiryTimeMillis) > Date.now();
+
+    return isPurchased && notExpired;
   } catch (error) {
     console.error(
       'Google Play subscription verification error:',

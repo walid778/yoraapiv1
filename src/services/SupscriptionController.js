@@ -59,7 +59,7 @@ const verifyPurchase = async (req, res) => {
     }
 
     // 3. لأغراض التطوير فقط - يمكن تجاوز التحقق
-    if (process.env.NODE_ENV === 'production') {
+    if (process.env.NODE_ENV === 'development') {
       console.log('DEV MODE: Skipping purchase validation');
       isValidPurchase = true;
     }
