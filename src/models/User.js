@@ -98,21 +98,6 @@ subscription: {
     ref: 'UsersProfile'
   }],
 
-   subscriptionPlan: {
-    type: String,
-    default: null,
-  },
-  subscriptionExpiresAt: {
-    type: Date,
-    default: null,
-  },
-
-   previousSubscription: {
-    plan: String,
-    expiresAt: Date,
-    cancelledAt: Date
-  },
-
   // سجل المشتريات
   purchaseHistory: [{
     packageId: Number,

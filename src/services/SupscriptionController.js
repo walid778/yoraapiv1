@@ -84,49 +84,44 @@ const verifyPurchase = async (req, res) => {
     const now = new Date();
     let subscriptionExpiresAt = new Date();
     
-    if (user.subscriptionExpiresAt && user.subscriptionExpiresAt > now) {
-      // تجديد الاشتراك الحالي
-      subscriptionExpiresAt = new Date(user.subscriptionExpiresAt);
-      subscriptionExpiresAt.setMonth(subscriptionExpiresAt.getMonth() + plan.months);
-    } else {
-      // اشتراك جديد
-      subscriptionExpiresAt.setMonth(subscriptionExpiresAt.getMonth() + plan.months);
+    if (plan.months === 1) {
+      subscriptionExpiresAt.setMonth(now.getMonth() + 1);
+    } else if (plan.months === 12) {
+      subscriptionExpiresAt.setFullYear(now.getFullYear() + 1);
     }
 
     // 6. تحديث المستخدم
-    user.subscriptionPlan = plan.name;
-    user.subscriptionExpiresAt = subscriptionExpiresAt;
-    
-    user.subscription = {
-  plan: plan.name,
-  expiresAt: subscriptionExpiresAt,
-  isActive: subscriptionExpiresAt > new Date(),
-};
+     user.subscription = {
+      plan: plan.name,
+      expiresAt: subscriptionExpiresAt,
+      isActive: true,
+    };
 
 
     // 7. حفظ سجل الشراء
-    user.purchaseHistory = user.purchaseHistory || [];
+     user.purchaseHistory = user.purchaseHistory || [];
     user.purchaseHistory.push({
       productId: plan.productId,
       purchaseToken,
       purchaseDate: new Date(),
       amount: plan.price,
       platform,
-      verified: true
+      verified: true,
+      expiresAt: subscriptionExpiresAt
     });
 
     await user.save();
 
     // 8. الرد الناجح
-   res.status(200).json({
-  success: true,
-  subscription: {
-    plan: plan.name,
-    expiresAt: subscriptionExpiresAt,
-    isActive: true,
-    features: plan.features,
-  },
-});
+    res.status(200).json({
+      success: true,
+      subscription: {
+        plan: plan.name,
+        expiresAt: subscriptionExpiresAt,
+        isActive: true,
+        features: plan.features,
+      },
+    });
 
 
   } catch (err) {
