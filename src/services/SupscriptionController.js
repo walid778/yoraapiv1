@@ -86,29 +86,21 @@ let isActive = false;
 
 // Use Google Play / Apple verification result
 if (platform === 'google') {
-  const purchaseData = await InAppPurchase.verifyGooglePlayPurchaseV2(
+  const purchaseData = await InAppPurchase.verifyGooglePlayPurchase(
     purchaseToken,
     productId,
     process.env.ANDROID_PACKAGE_NAME || 'com.raven.yora'
   );
 
-  if (!purchaseData) {
+  if (!purchaseData || !purchaseData.isActive) {
     return res.status(400).json({ success: false, message: "Invalid purchase token" });
   }
 
-  const lineItem = purchaseData.lineItems?.[0];
-
-  if (!lineItem) {
-    return res.status(400).json({ success: false, message: "Invalid purchase token" });
-  }
-
-  subscriptionExpiresAt = lineItem.expiryTime ? new Date(lineItem.expiryTime) : null;
-  isActive = lineItem.state === 'ACTIVE' && (!subscriptionExpiresAt || subscriptionExpiresAt > new Date());
-
-} else if (platform === 'apple') {
-  isActive = await InAppPurchase.verifyApplePurchase(receiptData || purchaseToken, productId);
-  subscriptionExpiresAt = isActive ? new Date(new Date().setMonth(new Date().getMonth() + plan.months)) : null;
+  subscriptionExpiresAt = purchaseData.expiryTime;
+  isActive = purchaseData.isActive;
 }
+
+
 
 // Update user subscription
 user.subscription = {

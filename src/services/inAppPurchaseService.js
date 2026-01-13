@@ -100,38 +100,21 @@ static async verifyGooglePlayPurchase(purchaseToken, productId, packageName) {
       token: purchaseToken,
     });
 
-    
-console.log(
-  'SUB RESPONSE:',
-  JSON.stringify(response.data, null, 2)
-);
+    const subscription = response.data;
+    const lineItem = subscription.lineItems?.[0];
+    if (!lineItem) return null;
 
-    const sub = response.data;
+    const isActive = lineItem.state === 'ACTIVE' && (!lineItem.expiryTime || new Date(lineItem.expiryTime) > new Date());
 
-    /*
-      sub.lineItems[0].expiryTime
-      sub.lineItems[0].state === 'ACTIVE'
-    */
-
-    const lineItem = sub.lineItems?.[0];
-
-    if (!lineItem) return false;
-
-    const isActive = lineItem.state === 'ACTIVE';
-    const notExpired =
-      !lineItem.expiryTime ||
-      new Date(lineItem.expiryTime).getTime() > Date.now();
-
-    return isActive && notExpired;
+    return { isActive, expiryTime: lineItem.expiryTime ? new Date(lineItem.expiryTime) : null };
   } catch (error) {
     console.error(
       'Google Play subscription verification error:',
       error.response?.data || error.message
     );
-    return false;
+    return null;
   }
 }
-
 
   static async verifyApplePurchase(receiptData, productId, isSandbox = false) {
     try {
