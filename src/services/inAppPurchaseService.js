@@ -100,6 +100,12 @@ static async verifyGooglePlayPurchase(purchaseToken, productId, packageName) {
       token: purchaseToken,
     });
 
+    
+console.log(
+  'SUB RESPONSE:',
+  JSON.stringify(response.data, null, 2)
+);
+
     const sub = response.data;
 
     /*
