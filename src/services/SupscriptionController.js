@@ -81,21 +81,41 @@ const verifyPurchase = async (req, res) => {
     }
 
     // 5. حساب تاريخ الانتهاء
-    const now = new Date();
-    let subscriptionExpiresAt = new Date();
-    
-    if (plan.months === 1) {
-      subscriptionExpiresAt.setMonth(now.getMonth() + 1);
-    } else if (plan.months === 12) {
-      subscriptionExpiresAt.setFullYear(now.getFullYear() + 1);
-    }
+    let subscriptionExpiresAt = null;
+let isActive = false;
 
-    // 6. تحديث المستخدم
-     user.subscription = {
-      plan: plan.name,
-      expiresAt: subscriptionExpiresAt,
-      isActive: true,
-    };
+// Use Google Play / Apple verification result
+if (platform === 'google') {
+  const purchaseData = await InAppPurchase.verifyGooglePlayPurchaseV2(
+    purchaseToken,
+    productId,
+    process.env.ANDROID_PACKAGE_NAME || 'com.raven.yora'
+  );
+
+  if (!purchaseData) {
+    return res.status(400).json({ success: false, message: "Invalid purchase token" });
+  }
+
+  const lineItem = purchaseData.lineItems?.[0];
+
+  if (!lineItem) {
+    return res.status(400).json({ success: false, message: "Invalid purchase token" });
+  }
+
+  subscriptionExpiresAt = lineItem.expiryTime ? new Date(lineItem.expiryTime) : null;
+  isActive = lineItem.state === 'ACTIVE' && (!subscriptionExpiresAt || subscriptionExpiresAt > new Date());
+
+} else if (platform === 'apple') {
+  isActive = await InAppPurchase.verifyApplePurchase(receiptData || purchaseToken, productId);
+  subscriptionExpiresAt = isActive ? new Date(new Date().setMonth(new Date().getMonth() + plan.months)) : null;
+}
+
+// Update user subscription
+user.subscription = {
+  plan: plan.name,
+  expiresAt: subscriptionExpiresAt,
+  isActive,
+};
 
 
     // 7. حفظ سجل الشراء
@@ -113,15 +133,16 @@ const verifyPurchase = async (req, res) => {
     await user.save();
 
     // 8. الرد الناجح
-    res.status(200).json({
-      success: true,
-      subscription: {
-        plan: plan.name,
-        expiresAt: subscriptionExpiresAt,
-        isActive: true,
-        features: plan.features,
-      },
-    });
+  res.status(200).json({
+  success: true,
+  subscription: {
+    plan: plan.name,
+    expiresAt: subscriptionExpiresAt,
+    isActive,
+    features: plan.features,
+  },
+});
+
 
 
   } catch (err) {
