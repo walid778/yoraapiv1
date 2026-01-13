@@ -95,26 +95,28 @@ static async verifyGooglePlayPurchase(purchaseToken, productId, packageName) {
       auth: authClient,
     });
 
-    const response = await androidPublisher.purchases.subscriptions.get({
+    const response = await androidPublisher.purchases.subscriptionsv2.get({
       packageName,
-      subscriptionId: productId, // ⚠️ مهم جدًا
       token: purchaseToken,
     });
 
-    const subscription = response.data;
+    const sub = response.data;
 
     /*
-      paymentState:
-      1 = Purchased
-      2 = Pending
+      sub.lineItems[0].expiryTime
+      sub.lineItems[0].state === 'ACTIVE'
     */
 
-    const isPurchased = subscription.paymentState === 1;
-    const notExpired =
-      !subscription.expiryTimeMillis ||
-      Number(subscription.expiryTimeMillis) > Date.now();
+    const lineItem = sub.lineItems?.[0];
 
-    return isPurchased && notExpired;
+    if (!lineItem) return false;
+
+    const isActive = lineItem.state === 'ACTIVE';
+    const notExpired =
+      !lineItem.expiryTime ||
+      new Date(lineItem.expiryTime).getTime() > Date.now();
+
+    return isActive && notExpired;
   } catch (error) {
     console.error(
       'Google Play subscription verification error:',
