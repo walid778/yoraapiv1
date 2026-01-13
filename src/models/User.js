@@ -38,15 +38,35 @@ const UserProfileSchema = new mongoose.Schema({
     default: null,
   },
 
+  verification: {
   isVerified: {
     type: Boolean,
     default: false,
   },
+  verifiedBy: {
+    type: String, // admin | system | manual
+    default: null,
+  },
+  verifiedAt: {
+    type: Date,
+    default: null,
+  }
+},
 
-  verificationExpiresAt: {
+subscription: {
+  plan: {
+    type: String,
+    default: null,
+  },
+  expiresAt: {
     type: Date,
     default: null,
   },
+  isActive: {
+    type: Boolean,
+    default: false,
+  }
+},
 
   isAdmin: {
     type: Boolean,

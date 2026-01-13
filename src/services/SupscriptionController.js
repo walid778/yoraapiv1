@@ -97,10 +97,12 @@ const verifyPurchase = async (req, res) => {
     user.subscriptionPlan = plan.name;
     user.subscriptionExpiresAt = subscriptionExpiresAt;
     
-    if (plan.features.includes("Verified Badge")) {
-      user.isVerified = true;
-      user.verificationExpiresAt = subscriptionExpiresAt;
-    }
+    user.subscription = {
+  plan: plan.name,
+  expiresAt: subscriptionExpiresAt,
+  isActive: subscriptionExpiresAt > new Date(),
+};
+
 
     // 7. حفظ سجل الشراء
     user.purchaseHistory = user.purchaseHistory || [];
@@ -116,17 +118,16 @@ const verifyPurchase = async (req, res) => {
     await user.save();
 
     // 8. الرد الناجح
-    res.status(200).json({
-      success: true,
-      message: `Subscribed to ${plan.name}`,
-      subscription: {
-        plan: plan.name,
-        expiresAt: subscriptionExpiresAt,
-        features: plan.features,
-        isActive: true,
-        daysRemaining: Math.ceil((subscriptionExpiresAt - now) / (1000 * 60 * 60 * 24))
-      }
-    });
+   res.status(200).json({
+  success: true,
+  subscription: {
+    plan: plan.name,
+    expiresAt: subscriptionExpiresAt,
+    isActive: true,
+    features: plan.features,
+  },
+});
+
 
   } catch (err) {
     console.error('Subscription error:', err);

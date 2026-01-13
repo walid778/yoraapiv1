@@ -1,49 +1,77 @@
 const Auth = require('../models/Auth');
 const UserProfile = require('../models/User');
 
+/* =========================
+   Helpers
+========================= */
+const computeSubscriptionState = (user) => {
+  const now = new Date();
+
+  if (user.subscription?.expiresAt && user.subscription.expiresAt > now) {
+    user.subscription.isActive = true;
+  } else {
+    user.subscription.isActive = false;
+  }
+};
+
+/* =========================
+   GET ME
+========================= */
 const getMe = async (req, res) => {
-    try {
-        const userProfile = await UserProfile.findById(req.user.id);
-if (!userProfile) {
-    return res.status(404).json({ success: false, message: 'User not found' });
-}
+  try {
+    const userProfile = await UserProfile.findById(req.user.id);
+    if (!userProfile) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
 
-const authData = await Auth.findById(userProfile.authId).select("-password");
+    computeSubscriptionState(userProfile);
 
-const avatarUrl = userProfile.avatar 
-      ? `${req.protocol}://${req.get('host')}${userProfile.avatar}` 
-      : null;
+    const authData = await Auth.findById(userProfile.authId).select('-password');
 
-return res.status(200).json({
-    success: true,
-    user: {
+    return res.status(200).json({
+      success: true,
+      user: {
         id: userProfile._id,
         name: userProfile.name,
         username: userProfile.username,
-        email: authData.email,
+        email: authData?.email || null,
         avatar: userProfile.avatar,
         cover: userProfile.cover || null,
-        bio: userProfile.bio || "",
+        bio: userProfile.bio || '',
         birth: userProfile.birth || null,
-        isVerified: userProfile.isVerified,
-        verificationExpiresAt: userProfile.verificationExpiresAt,
+
+        // 🔹 Verification
+        verification: {
+          isVerified: userProfile.verification?.isVerified || false,
+          verifiedAt: userProfile.verification?.verifiedAt || null,
+          verifiedBy: userProfile.verification?.verifiedBy || null,
+        },
+
+        // 🔹 Subscription
+        subscription: {
+          plan: userProfile.subscription?.plan || null,
+          expiresAt: userProfile.subscription?.expiresAt || null,
+          isActive: userProfile.subscription?.isActive || false,
+        },
+
         isAdmin: userProfile.isAdmin,
         createdAt: userProfile.createdAt,
-    }
-});
-
-
-    } catch (err) {
-        console.error(err);
-        return res.status(500).json({ success: false, message: 'Server error' });
-    }
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
 };
 
+
+/* =========================
+   GET USER BY ID
+========================= */
 const getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
 
-    // Validate userId
     if (!userId.match(/^[0-9a-fA-F]{24}$/)) {
       return res.status(400).json({ success: false, message: 'Invalid user ID' });
     }
@@ -53,7 +81,7 @@ const getUserById = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    const authData = await Auth.findById(userProfile.authId).select("-password");
+    computeSubscriptionState(userProfile);
 
     return res.status(200).json({
       success: true,
@@ -61,29 +89,35 @@ const getUserById = async (req, res) => {
         id: userProfile._id,
         name: userProfile.name,
         username: userProfile.username,
-        email: authData?.email || null,
-        avatar: userProfile.avatar || null,
-        cover: userProfile.cover || null,
-        bio: userProfile.bio || "",
+        avatar: userProfile.avatar,
+        cover: userProfile.cover,
+        bio: userProfile.bio || '',
         birth: userProfile.birth || null,
-        isVerified: userProfile.isVerified,
-        verificationExpiresAt: userProfile.verificationExpiresAt,
-        isAdmin: userProfile.isAdmin,
-        createdAt: userProfile.createdAt,
-      }
-    });
 
+        verification: {
+          isVerified: userProfile.verification?.isVerified || false,
+        },
+
+        subscription: {
+          isActive: userProfile.subscription?.isActive || false,
+        },
+
+        createdAt: userProfile.createdAt,
+      },
+    });
   } catch (err) {
-    console.error('Error fetching user by ID:', err);
-    return res.status(500).json({ success: false, message: 'Server error' });
+    console.error(err);
+    res.status(500).json({ success: false, message: 'Server error' });
   }
 };
 
-
+/* =========================
+   ADMIN VERIFY USER
+========================= */
 const verifyuser = async (req, res) => {
   try {
     const { userId } = req.params;
-    const { isVerified, expiresAt } = req.body;
+    const { isVerified } = req.body;
 
     if (typeof isVerified !== 'boolean') {
       return res.status(400).json({ message: 'isVerified must be boolean' });
@@ -92,18 +126,17 @@ const verifyuser = async (req, res) => {
     const user = await UserProfile.findById(userId);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    user.isVerified = isVerified;
-    if (expiresAt) {
-      user.verificationExpiresAt = new Date(expiresAt);
-    } else {
-      user.verificationExpiresAt = null; // permanent verification if no expiresAt
-    }
+    user.verification = {
+      isVerified,
+      verifiedBy: isVerified ? 'admin' : null,
+      verifiedAt: isVerified ? new Date() : null,
+    };
 
     await user.save();
 
     res.json({
+      success: true,
       message: `User ${isVerified ? 'verified' : 'unverified'} successfully`,
-      user,
     });
   } catch (err) {
     console.error(err);
