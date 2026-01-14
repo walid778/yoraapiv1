@@ -9,8 +9,8 @@ const subscriptionPlans = [
     price: 9.99,
     features: ['Verified Badge'],
     productId: 'com.raven.yora.subscription.monthly',
-    platform: 'both', // أو 'ios', 'android'
-    type: 'renewable' // 'renewable' أو 'non_renewable'
+    platform: 'both',
+    type: 'renewable'
   },
   { 
     id: 2, 
@@ -24,94 +24,49 @@ const subscriptionPlans = [
   }
 ];
 
-
 const verifyPurchase = async (req, res) => {
   try {
     const { productId, purchaseToken, platform, receiptData } = req.body;
     const userId = req.user.id;
 
-    // 1. البحث عن الـ plan باستخدام productId فقط
     const plan = subscriptionPlans.find(p => p.productId === productId);
-    
-    if (!plan) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Invalid product ID" 
-      });
-    }
+    if (!plan) return res.status(400).json({ success: false, message: "Invalid product ID" });
 
-    // 2. التحقق من صحة الـ purchase (أهم خطوة!)
-    let isValidPurchase = false;
-    
+    let purchaseData = null;
+
     if (platform === 'google') {
-      // تحقق مع Google Play Console
-      isValidPurchase = await InAppPurchase.verifyGooglePlayPurchase(
-        purchaseToken, 
+      purchaseData = await InAppPurchase.verifyGooglePlayPurchase(
+        purchaseToken,
         productId,
         process.env.ANDROID_PACKAGE_NAME || 'com.raven.yora'
       );
     } else if (platform === 'apple') {
-      // تحقق مع Apple App Store
-      isValidPurchase = await InAppPurchase.verifyApplePurchase(
-        receiptData || purchaseToken, 
-        productId
-      );
+      const isValid = await InAppPurchase.verifyApplePurchase(receiptData || purchaseToken, productId);
+      if (!isValid) return res.status(400).json({ success: false, message: "Invalid purchase token" });
+      purchaseData = { isActive: true, expiryTime: null }; // Apple non-expiring for now
     }
 
-    // 3. لأغراض التطوير فقط - يمكن تجاوز التحقق
+    // DEV mode bypass
     if (process.env.NODE_ENV === 'development') {
       console.log('DEV MODE: Skipping purchase validation');
-      isValidPurchase = true;
+      purchaseData = { isActive: true, expiryTime: null };
     }
 
-    if (!isValidPurchase) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Invalid purchase token" 
-      });
+    if (!purchaseData || !purchaseData.isActive) {
+      return res.status(400).json({ success: false, message: "Invalid purchase token" });
     }
 
-    // 4. العثور على المستخدم
+    // تحديث الاشتراك
     const user = await UserProfile.findById(userId);
-    if (!user) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "User not found" 
-      });
-    }
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
-    // 5. حساب تاريخ الانتهاء
-    let subscriptionExpiresAt = null;
-let isActive = false;
+    user.subscription = {
+      plan: plan.name,
+      expiresAt: purchaseData.expiryTime,
+      isActive: purchaseData.isActive
+    };
 
-// Use Google Play / Apple verification result
-if (platform === 'google') {
-  const purchaseData = await InAppPurchase.verifyGooglePlayPurchase(
-    purchaseToken,
-    productId,
-    process.env.ANDROID_PACKAGE_NAME || 'com.raven.yora'
-  );
-
-  if (!purchaseData || !purchaseData.isActive) {
-    return res.status(400).json({ success: false, message: "Invalid purchase token" });
-  }
-
-  subscriptionExpiresAt = purchaseData.expiryTime;
-  isActive = purchaseData.isActive;
-}
-
-
-
-// Update user subscription
-user.subscription = {
-  plan: plan.name,
-  expiresAt: subscriptionExpiresAt,
-  isActive,
-};
-
-
-    // 7. حفظ سجل الشراء
-     user.purchaseHistory = user.purchaseHistory || [];
+    user.purchaseHistory = user.purchaseHistory || [];
     user.purchaseHistory.push({
       productId: plan.productId,
       purchaseToken,
@@ -119,34 +74,24 @@ user.subscription = {
       amount: plan.price,
       platform,
       verified: true,
-      expiresAt: subscriptionExpiresAt
+      expiresAt: purchaseData.expiryTime
     });
 
     await user.save();
 
-    // 8. الرد الناجح
-  res.status(200).json({
-  success: true,
-  subscription: {
-    plan: plan.name,
-    expiresAt: subscriptionExpiresAt,
-    isActive,
-    features: plan.features,
-  },
-});
-
-
-
+    res.status(200).json({
+      success: true,
+      subscription: {
+        plan: plan.name,
+        expiresAt: purchaseData.expiryTime,
+        isActive: purchaseData.isActive,
+        features: plan.features,
+      },
+    });
   } catch (err) {
     console.error('Subscription error:', err);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Internal server error' 
-    });
+    res.status(500).json({ success: false, message: 'Internal server error' });
   }
 };
 
-module.exports = 
-{ 
-    verifyPurchase,
-};
+module.exports = { verifyPurchase };
