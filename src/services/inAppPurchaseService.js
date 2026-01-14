@@ -4,50 +4,46 @@ const path = require('path');
 
 class InAppPurchaseService {
   // ======= Google Play subscription verification =======
-  static async verifyGooglePlayPurchase(purchaseToken, productId, packageName) {
-    try {
-      const keyFilePath = path.join(__dirname, 'service-account.json');
+ static async verifyGooglePlayPurchase(purchaseToken, productId, packageName) {
+  try {
+    const keyFilePath = path.join(__dirname, 'service-account.json');
 
-      const auth = new google.auth.GoogleAuth({
-        keyFile: keyFilePath,
-        scopes: ['https://www.googleapis.com/auth/androidpublisher'],
-      });
+    const auth = new google.auth.GoogleAuth({
+      keyFile: keyFilePath,
+      scopes: ['https://www.googleapis.com/auth/androidpublisher'],
+    });
 
-      const authClient = await auth.getClient();
-      const androidPublisher = google.androidpublisher({
-        version: 'v3',
-        auth: authClient,
-      });
+    const authClient = await auth.getClient();
+    const androidPublisher = google.androidpublisher({
+      version: 'v3',
+      auth: authClient,
+    });
 
-      const response = await androidPublisher.purchases.subscriptionsv2.get({
-        packageName,
-        token: purchaseToken,
-      });
+    const response = await androidPublisher.purchases.subscriptionsv2.get({
+      packageName,
+      token: purchaseToken,
+    });
 
-      const subscription = response.data;
+    const subscription = response.data;
 
-      // Debug كامل
-      console.log('Google subscription response:', JSON.stringify(subscription, null, 2));
+    console.log('Google subscription response:', JSON.stringify(subscription, null, 2));
 
-      // العثور على lineItem الصحيح
-      const lineItem = subscription.lineItems?.find(item => item.productId === productId);
-      if (!lineItem) {
-        console.warn('No matching lineItem found for productId:', productId);
-        return null;
-      }
+    // تحقق من حالة الاشتراك
+    const isActive = subscription.subscriptionState === 'SUBSCRIPTION_STATE_ACTIVE';
 
-      const isActive = lineItem.state === 'ACTIVE';
-      const expiryTime = lineItem.expiryTime ? new Date(lineItem.expiryTime) : null;
+    // العثور على lineItem الصحيح
+    const lineItem = subscription.lineItems?.find(item => item.productId === productId);
+    const expiryTime = lineItem?.expiryTime ? new Date(lineItem.expiryTime) : null;
 
-      return { isActive, expiryTime };
-    } catch (error) {
-      console.error(
-        'Google Play subscription verification error:',
-        error.response?.data || error.message
-      );
-      return null;
-    }
+    return { isActive, expiryTime };
+  } catch (error) {
+    console.error(
+      'Google Play subscription verification error:',
+      error.response?.data || error.message
+    );
+    return null;
   }
+}
 
   // ======= Apple verification =======
   static async verifyApplePurchase(receiptData, productId, isSandbox = false) {
